@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Algorithm Playground — Pathfinding & Sorting Visualizer</title>
+<style>
+  /* ============================================================
+     BASIC PAGE STYLING
+     The whole app lives in one file so it's easy to host on
+     GitHub Pages — no build step, no dependencies.
+     ============================================================ */
+  :root {
+    --bg: #0f1220;
+    --panel: #181c2f;
+    --panel-2: #1f2440;
+    --text: #e8eaf6;
+    --muted: #9aa0c3;
+    --accent: #5b8cff;
+    --accent-2: #38d39f;
+    --warn: #ffb54d;
+    --danger: #ff6b81;
+    --wall: #39406b;
+    --visited: #2e4a8f;
+    --frontier: #3f6fd8;
+    --path: #ffd166;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    padding: 20px 24px 8px;
+    text-align: center;
+  }
+  header h1 { font-size: 1.6rem; letter-spacing: 0.5px; }
+  header p { color: var(--muted); margin-top: 4px; font-size: 0.95rem; }
+
+  /* Tab buttons that switch between the two visualizers */
+  .tabs {
+    display: flex; justify-content: center; gap: 8px; margin: 16px 0;
+  }
+  .tab-btn {
+    background: var(--panel); color: var(--text); border: 1px solid #2a3055;
+    padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 0.95rem;
+  }
+  .tab-btn.active { background: var(--accent); border-color: var(--accent); }
+
+  .view { display: none; max-width: 1000px; margin: 0 auto; padding: 0 16px 40px; }
+  .view.active { display: block; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    background: var(--panel); border: 1px solid #2a3055;
+    padding: 10px; border-radius: 10px; margin-bottom: 12px;
+  }
+  .controls label { color: var(--muted); font-size: 0.85rem; }
+  select, button, input[type=range] {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid #2a3055; border-radius: 8px;
+    padding: 7px 12px; font-size: 0.9rem; cursor: pointer;
+  }
+  button.primary { background: var(--accent-2); color: #08281c; font-weight: 600; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 2px; color: var(--muted); font-size: 0.82rem; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .chip { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+
+  /* Pathfinding grid — built with CSS grid, one div per cell */
+  #grid {
+    display: grid; gap: 1px; background: #0b0e1a;
+    border: 1px solid #2a3055; border-radius: 8px; padding: 4px;
+    user-select: none; touch-action: none;
+  }
+  .cell { background: var(--panel-2); border-radius: 2px; aspect-ratio: 1; }
+  .cell.wall     { background: var(--wall); }
+  .cell.start    { background: var(--accent-2); }
+  .cell.end      { background: var(--danger); }
+  .cell.visited  { background: var(--visited); }
+  .cell.frontier { background: var(--frontier); }
+  .cell.path     { background: var(--path); }
+
+  /* Sorting bars */
+  #bars {
+    display: flex; align-items: flex-end; gap: 2px; height: 320px;
+    background: #0b0e1a; border: 1px solid #2a3055; border-radius: 8px; padding: 8px;
+  }
+  .bar { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; }
+  .bar.compare { background: var(--warn); }
+  .bar.swap    { background: var(--danger); }
+  .bar.sorted  { background: var(--accent-2); }
+
+  #status { color: var(--muted); font-size: 0.85rem; margin-top: 8px; min-height: 1.2em; }
+  footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 20px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Algorithm Playground</h1>
+  <p>Interactive visualizer for pathfinding and sorting algorithms — vanilla JavaScript, zero dependencies.</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" data-view="path-view">Pathfinding</button>
+  <button class="tab-btn" data-view="sort-view">Sorting</button>
+</div>
+
+<!-- ==================== PATHFINDING VIEW ==================== -->
+<section id="path-view" class="view active">
+  <div class="controls">
+    <label>Algorithm</label>
+    <select id="path-algo">
+      <option value="astar">A* (A-star)</option>
+      <option value="dijkstra">Dijkstra</option>
+      <option value="bfs">Breadth-First Search</option>
+      <option value="dfs">Depth-First Search</option>
+    </select>
+    <button class="primary" id="path-run">Run</button>
+    <button id="path-maze">Generate Maze</button>
+    <button id="path-clear">Clear Walls</button>
+    <button id="path-reset">Reset Search</button>
+    <label>Speed</label>
+    <input type="range" id="path-speed" min="1" max="100" value="70">
+  </div>
+  <div class="legend">
+    <span><span class="chip" style="background:var(--accent-2)"></span>Start (drag to move)</span>
+    <span><span class="chip" style="background:var(--danger)"></span>Target (drag to move)</span>
+    <span><span class="chip" style="background:var(--wall)"></span>Wall (click/drag to draw)</span>
+    <span><span class="chip" style="background:var(--visited)"></span>Visited</span>
+    <span><span class="chip" style="background:var(--path)"></span>Shortest path</span>
+  </div>
+  <div id="grid"></div>
+  <div id="status"></div>
+</section>
+
+<!-- ==================== SORTING VIEW ==================== -->
+<section id="sort-view" class="view">
+  <div class="controls">
+    <label>Algorithm</label>
+    <select id="sort-algo">
+      <option value="bubble">Bubble Sort</option>
+      <option value="insertion">Insertion Sort</option>
+      <option value="selection">Selection Sort</option>
+      <option value="merge">Merge Sort</option>
+      <option value="quick">Quick Sort</option>
+    </select>
+    <button class="primary" id="sort-run">Sort</button>
+    <button id="sort-shuffle">Shuffle</button>
+    <label>Size</label>
+    <input type="range" id="sort-size" min="10" max="120" value="60">
+    <label>Speed</label>
+    <input type="range" id="sort-speed" min="1" max="100" value="70">
+  </div>
+  <div class="legend">
+    <span><span class="chip" style="background:var(--warn)"></span>Comparing</span>
+    <span><span class="chip" style="background:var(--danger)"></span>Swapping</span>
+    <span><span class="chip" style="background:var(--accent-2)"></span>Sorted</span>
+  </div>
+  <div id="bars"></div>
+  <div id="status2"></div>
+</section>
+
+<footer>
+  Built by Michael · <a href="https://github.com/">View source on GitHub</a>
+</footer>
+
+<script>
+/* ==============================================================
+   SHARED HELPERS
+   ============================================================== */
+
+// Small pause helper so we can animate step-by-step with async/await.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Convert a 1-100 "speed" slider value into a millisecond delay.
+// Higher slider value = shorter delay = faster animation.
+const speedToDelay = (v) => Math.floor(120 / v * 4);
+
+// Tab switching -------------------------------------------------
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.view).classList.add("active");
+  });
+});
+
+/* ==============================================================
+   PART 1 — PATHFINDING VISUALIZER
+   The grid is a 2D array of cell objects. Each algorithm explores
+   the grid and we color cells as they are visited, then trace the
+   final path backwards from the target using "previous" pointers.
+   ============================================================== */
+
+const COLS = 40, ROWS = 22;
+const gridEl = document.getElementById("grid");
+gridEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+
+let grid = [];              // grid[row][col] = cell object
+let start = { r: 11, c: 6 };
+let end   = { r: 11, c: 33 };
+let running = false;        // lock the UI while an animation runs
+let mouseDown = false;
+let dragging = null;        // "start" | "end" | null — for moving endpoints
+
+function buildGrid() {
+  gridEl.innerHTML = "";
+  grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = [];
+    for (let c = 0; c < COLS; c++) {
+      const el = document.createElement("div");
+      el.className = "cell";
+      el.dataset.r = r;
+      el.dataset.c = c;
+      gridEl.appendChild(el);
+      row.push({ r, c, el, wall: false });
+    }
+    grid.push(row);
+  }
+  paintEndpoints();
+}
+
+function paintEndpoints() {
+  grid[start.r][start.c].el.classList.add("start");
+  grid[end.r][end.c].el.classList.add("end");
+}
+
+// Remove search coloring but keep walls (so you can re-run on the same maze).
+function resetSearch() {
+  for (const row of grid) for (const cell of row) {
+    cell.el.classList.remove("visited", "frontier", "path");
+  }
+  setStatus("");
+}
+
+function clearWalls() {
+  for (const row of grid) for (const cell of row) {
+    cell.wall = false;
+    cell.el.className = "cell";
+  }
+  paintEndpoints();
+  setStatus("");
+}
+
+function setStatus(msg) { document.getElementById("status").textContent = msg; }
+
+// --- Mouse / touch interaction: draw walls, drag endpoints -----
+gridEl.addEventListener("pointerdown", (e) => {
+  if (running) return;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  mouseDown = true;
+  if (cell.r === start.r && cell.c === start.c) dragging = "start";
+  else if (cell.r === end.r && cell.c === end.c) dragging = "end";
+  else toggleWall(cell);
+});
+gridEl.addEventListener("pointermove", (e) => {
+  if (!mouseDown || running) return;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  if (dragging) moveEndpoint(dragging, cell);
+  else if (!(cell.r === start.r && cell.c === start.c) && !(cell.r === end.r && cell.c === end.c)) {
+    setWall(cell, true);
+  }
+});
+window.addEventListener("pointerup", () => { mouseDown = false; dragging = null; });
+
+function cellFromEvent(e) {
+  const t = document.elementFromPoint(e.clientX, e.clientY);
+  if (!t || !t.dataset || t.dataset.r === undefined) return null;
+  return grid[+t.dataset.r][+t.dataset.c];
+}
+function toggleWall(cell) { setWall(cell, !cell.wall); }
+function setWall(cell, isWall) {
+  cell.wall = isWall;
+  cell.el.classList.toggle("wall", isWall);
+}
+function moveEndpoint(which, cell) {
+  if (cell.wall) return;
+  const point = which === "start" ? start : end;
+  grid[point.r][point.c].el.classList.remove(which);
+  point.r = cell.r; point.c = cell.c;
+  cell.el.classList.add(which);
+}
+
+// --- Neighbors: up, down, left, right --------------------------
+function neighbors(cell) {
+  const out = [];
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  for (const [dr, dc] of dirs) {
+    const r = cell.r + dr, c = cell.c + dc;
+    if (r >= 0 && r < ROWS && c >= 0 && c < COLS && !grid[r][c].wall) out.push(grid[r][c]);
+  }
+  return out;
+}
+
+// Manhattan distance — the heuristic that makes A* "smart".
+// It estimates how far a cell is from the target (never overestimates,
+// which is what guarantees A* still finds the shortest path).
+const heuristic = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
+
+/* --- The pathfinding algorithms --------------------------------
+   All four share the same skeleton:
+     1. keep a "frontier" of cells to explore next
+     2. repeatedly take a cell off the frontier and look at neighbors
+     3. remember each cell's "previous" cell so we can rebuild the path
+   They differ ONLY in how they pick the next cell:
+     BFS       → first in, first out (a queue)         → shortest path
+     DFS       → last in, first out (a stack)          → NOT shortest
+     Dijkstra  → lowest cost so far                    → shortest path
+     A*        → lowest (cost so far + estimate left)  → shortest, fastest
+---------------------------------------------------------------- */
+async function runPathfinding() {
+  const algo = document.getElementById("path-algo").value;
+  const delay = () => speedToDelay(+document.getElementById("path-speed").value);
+  resetSearch();
+  running = true;
+  document.getElementById("path-run").disabled = true;
+
+  const startCell = grid[start.r][start.c];
+  const endCell = grid[end.r][end.c];
+  const prev = new Map();      // cell -> the cell we came from
+  const dist = new Map();      // cell -> cost from start
+  dist.set(startCell, 0);
+  let frontier = [startCell];
+  const seen = new Set([startCell]);
+  let found = false;
+  let visitedCount = 0;
+
+  while (frontier.length > 0) {
+    // Pick the next cell according to the chosen algorithm.
+    let current;
+    if (algo === "bfs") current = frontier.shift();
+    else if (algo === "dfs") current = frontier.pop();
+    else {
+      // Dijkstra / A*: pick the frontier cell with the lowest score.
+      // (A real priority queue would be faster, but a linear scan is
+      //  simple and plenty fast for a 40x22 grid.)
+      let bestIdx = 0;
+      for (let i = 1; i < frontier.length; i++) {
+        const score = (cell) => dist.get(cell) + (algo === "astar" ? heuristic(cell, endCell) : 0);
+        if (score(frontier[i]) < score(frontier[bestIdx])) bestIdx = i;
+      }
+      current = frontier.splice(bestIdx, 1)[0];
+    }
+
+    if (current === endCell) { found = true; break; }
+
+    if (current !== startCell) {
+      current.el.classList.remove("frontier");
+      current.el.classList.add("visited");
+    }
+    visitedCount++;
+
+    for (const next of neighbors(current)) {
+      const newDist = dist.get(current) + 1;
+      if (!seen.has(next) || newDist < (dist.get(next) ?? Infinity)) {
+        seen.add(next);
+        dist.set(next, newDist);
+        prev.set(next, current);
+        frontier.push(next);
+        if (next !== endCell) next.el.classList.add("frontier");
+      }
+    }
+    if (visitedCount % 3 === 0) await sleep(delay());   // animate every few steps
+  }
+
+  if (found) {
+    // Walk backwards from the target to rebuild the path.
+    const path = [];
+    let node = endCell;
+    while (prev.has(node)) { node = prev.get(node); if (node !== startCell) path.push(node); }
+    path.reverse();
+    for (const cell of path) {
+      cell.el.classList.remove("visited", "frontier");
+      cell.el.classList.add("path");
+      await sleep(12);
+    }
+    setStatus(`${algoName(algo)}: visited ${visitedCount} cells, path length ${path.length + 1}.`);
+  } else {
+    setStatus(`${algoName(algo)}: no path exists — the target is walled off.`);
+  }
+  running = false;
+  document.getElementById("path-run").disabled = false;
+}
+
+function algoName(key) {
+  return { astar: "A*", dijkstra: "Dijkstra", bfs: "BFS", dfs: "DFS",
+           bubble: "Bubble sort", insertion: "Insertion sort", selection: "Selection sort",
+           merge: "Merge sort", quick: "Quick sort" }[key];
+}
+
+// --- Maze generation: recursive division -----------------------
+// Splits the grid with a wall (leaving one gap), then recursively
+// splits each half. Produces nice solvable mazes.
+async function generateMaze() {
+  if (running) return;
+  clearWalls();
+  running = true;
+  await divide(0, 0, COLS - 1, ROWS - 1);
+  // Make sure start/end are never buried in a wall.
+  setWall(grid[start.r][start.c], false);
+  setWall(grid[end.r][end.c], false);
+  paintEndpoints();
+  running = false;
+}
+async function divide(x1, y1, x2, y2) {
+  const w = x2 - x1, h = y2 - y1;
+  if (w < 3 || h < 3) return;
+  const horizontal = h > w;
+  if (horizontal) {
+    const wallY = y1 + 2 * (1 + Math.floor(Math.random() * ((h - 2) / 2)));  // even rows
+    const gapX  = x1 + 2 * Math.floor(Math.random() * ((w + 1) / 2)) + 1;   // odd cols
+    for (let x = x1; x <= x2; x++) if (x !== gapX) setWall(grid[wallY][x], true);
+    await sleep(8);
+    await divide(x1, y1, x2, wallY - 1);
+    await divide(x1, wallY + 1, x2, y2);
+  } else {
+    const wallX = x1 + 2 * (1 + Math.floor(Math.random() * ((w - 2) / 2)));
+    const gapY  = y1 + 2 * Math.floor(Math.random() * ((h + 1) / 2)) + 1;
+    for (let y = y1; y <= y2; y++) if (y !== gapY) setWall(grid[y][wallX], true);
+    await sleep(8);
+    await divide(x1, y1, wallX - 1, y2);
+    await divide(wallX + 1, y1, x2, y2);
+  }
+}
+
+document.getElementById("path-run").addEventListener("click", () => { if (!running) runPathfinding(); });
+document.getElementById("path-maze").addEventListener("click", generateMaze);
+document.getElementById("path-clear").addEventListener("click", () => { if (!running) clearWalls(); });
+document.getElementById("path-reset").addEventListener("click", () => { if (!running) resetSearch(); });
+buildGrid();
+
+/* ==============================================================
+   PART 2 — SORTING VISUALIZER
+   The array is drawn as vertical bars. Each algorithm yields
+   "events" (compare / swap / overwrite) that we animate.
+   ============================================================== */
+
+const barsEl = document.getElementById("bars");
+let values = [];
+let sorting = false;
+
+function newArray() {
+  const n = +document.getElementById("sort-size").value;
+  values = Array.from({ length: n }, () => 8 + Math.floor(Math.random() * 292));
+  drawBars();
+  setStatus2("");
+}
+function drawBars(highlight = {}) {
+  barsEl.innerHTML = "";
+  const max = Math.max(...values);
+  values.forEach((v, i) => {
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.height = `${(v / max) * 100}%`;
+    if (highlight.compare?.includes(i)) bar.classList.add("compare");
+    if (highlight.swap?.includes(i)) bar.classList.add("swap");
+    if (highlight.sortedUpTo !== undefined && i <= highlight.sortedUpTo) bar.classList.add("sorted");
+    barsEl.appendChild(bar);
+  });
+}
+function setStatus2(msg) { document.getElementById("status2").textContent = msg; }
+const sortDelay = () => speedToDelay(+document.getElementById("sort-speed").value);
+
+// Each sort mutates `values` and calls render() to animate.
+let comparisons = 0, swaps = 0;
+async function render(highlight) {
+  drawBars(highlight);
+  await sleep(sortDelay());
+}
+
+async function bubbleSort() {
+  const n = values.length;
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = 0; j < n - 1 - i; j++) {
+      comparisons++;
+      if (values[j] > values[j + 1]) {
+        [values[j], values[j + 1]] = [values[j + 1], values[j]];
+        swaps++;
+        await render({ swap: [j, j + 1] });
+      } else {
+        await render({ compare: [j, j + 1] });
+      }
+    }
+  }
+}
+
+async function insertionSort() {
+  for (let i = 1; i < values.length; i++) {
+    let j = i;
+    // Shift the new element left until it's in the right spot.
+    while (j > 0 && values[j - 1] > values[j]) {
+      comparisons++; swaps++;
+      [values[j - 1], values[j]] = [values[j], values[j - 1]];
+      await render({ swap: [j - 1, j] });
+      j--;
+    }
+  }
+}
+
+async function selectionSort() {
+  const n = values.length;
+  for (let i = 0; i < n - 1; i++) {
+    let minIdx = i;
+    for (let j = i + 1; j < n; j++) {
+      comparisons++;
+      if (values[j] < values[minIdx]) minIdx = j;
+      if (j % 4 === 0) await render({ compare: [j, minIdx] });
+    }
+    if (minIdx !== i) {
+      [values[i], values[minIdx]] = [values[minIdx], values[i]];
+      swaps++;
+      await render({ swap: [i, minIdx] });
+    }
+  }
+}
+
+async function mergeSort(lo = 0, hi = values.length - 1) {
+  if (lo >= hi) return;
+  const mid = Math.floor((lo + hi) / 2);
+  await mergeSort(lo, mid);
+  await mergeSort(mid + 1, hi);
+  // Merge the two sorted halves into a temp array, then copy back.
+  const merged = [];
+  let i = lo, j = mid + 1;
+  while (i <= mid && j <= hi) {
+    comparisons++;
+    merged.push(values[i] <= values[j] ? values[i++] : values[j++]);
+  }
+  while (i <= mid) merged.push(values[i++]);
+  while (j <= hi) merged.push(values[j++]);
+  for (let k = 0; k < merged.length; k++) {
+    values[lo + k] = merged[k];
+    swaps++;
+    await render({ swap: [lo + k] });
+  }
+}
+
+async function quickSort(lo = 0, hi = values.length - 1) {
+  if (lo >= hi) return;
+  // Partition around the last element (the "pivot").
+  const pivot = values[hi];
+  let i = lo - 1;
+  for (let j = lo; j < hi; j++) {
+    comparisons++;
+    if (values[j] < pivot) {
+      i++;
+      [values[i], values[j]] = [values[j], values[i]];
+      swaps++;
+      await render({ swap: [i, j], compare: [hi] });
+    } else {
+      await render({ compare: [j, hi] });
+    }
+  }
+  [values[i + 1], values[hi]] = [values[hi], values[i + 1]];
+  await render({ swap: [i + 1, hi] });
+  await quickSort(lo, i);
+  await quickSort(i + 2, hi);
+}
+
+async function runSort() {
+  if (sorting) return;
+  sorting = true;
+  comparisons = 0; swaps = 0;
+  document.getElementById("sort-run").disabled = true;
+  const algo = document.getElementById("sort-algo").value;
+  const sorts = { bubble: bubbleSort, insertion: insertionSort, selection: selectionSort, merge: mergeSort, quick: quickSort };
+  await sorts[algo]();
+  // Victory sweep: paint everything green from left to right.
+  for (let i = 0; i < values.length; i++) {
+    drawBars({ sortedUpTo: i });
+    await sleep(6);
+  }
+  setStatus2(`${algoName(algo)}: ${comparisons} comparisons, ${swaps} writes on ${values.length} elements.`);
+  document.getElementById("sort-run").disabled = false;
+  sorting = false;
+}
+
+document.getElementById("sort-run").addEventListener("click", runSort);
+document.getElementById("sort-shuffle").addEventListener("click", () => { if (!sorting) newArray(); });
+document.getElementById("sort-size").addEventListener("input", () => { if (!sorting) newArray(); });
+newArray();
+</script>
+</body>
+</html>
