@@ -2,7 +2,7 @@
 
 An interactive visualizer for classic pathfinding and sorting algorithms, written in **plain HTML, CSS, and JavaScript** — no frameworks, no build step, no dependencies. Open `index.html` in any browser and it just works.
 
-**[▶ Live demo](https://YOUR-USERNAME.github.io/algorithm-playground/)** *(update this link after enabling GitHub Pages — see below)*
+**[▶ Live demo](https://kolouring.github.io/algorithm-playground/)** *(update this link after enabling GitHub Pages — see below)*
 
 ## Pathfinding
 
@@ -36,7 +36,7 @@ Implemented: **bubble sort, insertion sort, selection sort, merge sort, quick so
 No install needed:
 
 ```
-git clone https://github.com/YOUR-USERNAME/algorithm-playground.git
+git clone https://github.com/kolouring/algorithm-playground.git
 cd algorithm-playground
 open index.html        # macOS — or just double-click the file
 ```
