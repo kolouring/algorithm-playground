@@ -2,7 +2,7 @@
 
 An interactive visualizer for classic pathfinding and sorting algorithms, written in **plain HTML, CSS, and JavaScript** — no frameworks, no build step, no dependencies. Open `index.html` in any browser and it just works.
 
-**[▶ Live demo](https://kolouring.github.io/algorithm-playground/)** *(update this link after enabling GitHub Pages — see below)*
+**[▶ Live demo](https://kolouring.github.io/algorithm-playground/)
 
 ## Pathfinding
 
